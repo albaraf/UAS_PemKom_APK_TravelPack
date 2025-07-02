@@ -1,48 +1,74 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Class.java to edit this template
- */
 package com.mycompany.travelpackchecklist;
 
-/**
- *
- * @author ASUS
- */
 import javax.swing.*;
-import java.awt.BorderLayout;
-import java.awt.GridLayout;
+import java.awt.*;
 import java.awt.event.*;
-import java.io.*;
 import java.util.*;
+import com.mongodb.client.*;
+import org.bson.Document;
+import org.bson.conversions.Bson;
+import static com.mongodb.client.model.Filters.*;
+import com.mycompany.travelpackchecklist.ChecklistSaver;
+import com.mycompany.travelpackchecklist.Messages;
+import com.mycompany.travelpackchecklist.SerialManager;
 
 public class Main {
     private static Map<String, User> users = new HashMap<>();
     private static java.util.List<ChecklistItem<String>> checklist = new ArrayList<>();
-    private static final String USERS_FILE = "users.ser";
-    private static final String CHECKLIST_FILE = "checklist.ser";
+    private static String currentUsername = null;
+
+    private static final String CONNECTION_STRING = "mongodb://localhost:27017";
+    private static final String DB_NAME = "travelpackdb";
+    private static final MongoClient mongoClient = MongoClients.create(CONNECTION_STRING);
+    private static final MongoDatabase database = mongoClient.getDatabase(DB_NAME);
+    private static final MongoCollection<Document> userCollection = database.getCollection("users");
+    private static final MongoCollection<Document> checklistCollection = database.getCollection("checklist");
 
     public static void main(String[] args) {
         loadUsers();
-        loadChecklist();
         SwingUtilities.invokeLater(Main::showLoginForm);
     }
 
     private static void showLoginForm() {
-        JFrame frame = new JFrame("TravelPack Login");
+        JFrame frame = new JFrame(Messages.get("login.title"));
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(300, 150);
+        frame.setSize(400, 250);
 
-        JPanel panel = new JPanel(new GridLayout(3, 2));
+        JPanel inputPanel = new JPanel(new GridLayout(4, 2));
         JTextField usernameField = new JTextField();
         JPasswordField passwordField = new JPasswordField();
-        JButton loginButton = new JButton("Login");
+        JComboBox<String> languageSelector = new JComboBox<>(new String[] { "Indonesia", "English" });
 
-        panel.add(new JLabel("Username:"));
-        panel.add(usernameField);
-        panel.add(new JLabel("Password:"));
-        panel.add(passwordField);
-        panel.add(new JLabel());
-        panel.add(loginButton);
+        JLabel usernameLabel = new JLabel(Messages.get("label.username"));
+        JLabel passwordLabel = new JLabel(Messages.get("label.password"));
+        JLabel languageLabel = new JLabel(Messages.get("label.language"));
+
+        inputPanel.add(usernameLabel);
+        inputPanel.add(usernameField);
+        inputPanel.add(passwordLabel);
+        inputPanel.add(passwordField);
+        inputPanel.add(languageLabel);
+        inputPanel.add(languageSelector);
+
+        JButton loginButton = new JButton(Messages.get("button.login"));
+        JButton tambahUserButton = new JButton(Messages.get("button.adduser"));
+        JButton hapusUserButton = new JButton(Messages.get("button.deleteuser"));
+
+        JPanel buttonPanel = new JPanel(new FlowLayout());
+        buttonPanel.add(loginButton);
+        buttonPanel.add(tambahUserButton);
+        buttonPanel.add(hapusUserButton);
+
+        languageSelector.addActionListener(e -> {
+            String selectedLanguage = (String) languageSelector.getSelectedItem();
+            setLocaleFromSelection(selectedLanguage);
+            usernameLabel.setText(Messages.get("label.username"));
+            passwordLabel.setText(Messages.get("label.password"));
+            languageLabel.setText(Messages.get("label.language"));
+            loginButton.setText(Messages.get("button.login"));
+            tambahUserButton.setText(Messages.get("button.adduser"));
+            hapusUserButton.setText(Messages.get("button.deleteuser"));
+        });
 
         loginButton.addActionListener(e -> {
             String username = usernameField.getText();
@@ -51,27 +77,65 @@ public class Main {
 
             if (users.containsKey(username)) {
                 if (users.get(username).getPasswordHash().equals(hash)) {
+                    currentUsername = username;
                     frame.dispose();
+                    loadChecklist();
                     showChecklistUI();
                 } else {
-                    JOptionPane.showMessageDialog(frame, "Password salah.");
+                    JOptionPane.showMessageDialog(frame, Messages.get("login.wrongpassword"));
                 }
             } else {
-                users.put(username, new User(username, hash));
-                saveUsers();
-                JOptionPane.showMessageDialog(frame, "User baru dibuat.");
-                frame.dispose();
-                showChecklistUI();
+                JOptionPane.showMessageDialog(frame, Messages.get("login.usernotfound"));
             }
         });
 
-        frame.add(panel);
+        tambahUserButton.addActionListener(e -> {
+            String username = usernameField.getText();
+            String password = new String(passwordField.getPassword());
+            if (users.containsKey(username)) {
+                JOptionPane.showMessageDialog(frame, Messages.get("user.exists"));
+            } else {
+                String hash = PasswordUtil.hash(password);
+                users.put(username, new User(username, hash));
+                saveUsers();
+                JOptionPane.showMessageDialog(frame, Messages.get("user.added"));
+            }
+        });
+
+        hapusUserButton.addActionListener(e -> {
+            String username = usernameField.getText();
+            if (!users.containsKey(username)) {
+                JOptionPane.showMessageDialog(frame, Messages.get("login.usernotfound"));
+            } else {
+                users.remove(username);
+                deleteUserFromDB(username);
+                JOptionPane.showMessageDialog(frame, Messages.get("user.deleted"));
+            }
+        });
+
+        frame.setLayout(new BorderLayout());
+        frame.add(inputPanel, BorderLayout.CENTER);
+        frame.add(buttonPanel, BorderLayout.SOUTH);
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
     }
 
+    private static void setLocaleFromSelection(String selectedLanguage) {
+        Locale selectedLocale;
+        switch (selectedLanguage) {
+            case "Indonesia":
+                selectedLocale = new Locale("id", "ID");
+                break;
+            case "English":
+            default:
+                selectedLocale = new Locale("en");
+                break;
+        }
+        Messages.setLocale(selectedLocale);
+    }
+
     private static void showChecklistUI() {
-        JFrame frame = new JFrame("TravelPack - Checklist Perjalanan");
+        JFrame frame = new JFrame(Messages.get("checklist.title"));
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(400, 400);
 
@@ -80,14 +144,15 @@ public class Main {
         JList<ChecklistItem<String>> list = new JList<>(model);
         JScrollPane scrollPane = new JScrollPane(list);
 
-        JButton addButton = new JButton("Tambah Barang");
-        JButton markButton = new JButton("Tandai Dibawa");
-        JButton saveButton = new JButton("Simpan");
+        JButton addButton = new JButton(Messages.get("add.item"));
+        JButton markButton = new JButton(Messages.get("mark.packed"));
+        JButton saveButton = new JButton(Messages.get("save"));
+        JButton deleteButton = new JButton(Messages.get("delete"));
 
         addButton.addActionListener(e -> {
-            String item = JOptionPane.showInputDialog(frame, "Nama barang:");
+            String item = JOptionPane.showInputDialog(frame, Messages.get("add.item"));
             if (item != null && !item.isBlank()) {
-                int result = JOptionPane.showConfirmDialog(frame, "Apakah barang penting?", "Penting?", JOptionPane.YES_NO_OPTION);
+                int result = JOptionPane.showConfirmDialog(frame, Messages.get("important"), Messages.get("important.title"), JOptionPane.YES_NO_OPTION);
                 boolean penting = (result == JOptionPane.YES_OPTION);
                 ChecklistItem<String> newItem = new ChecklistItem<>(item, penting);
                 checklist.add(newItem);
@@ -103,50 +168,97 @@ public class Main {
             }
         });
 
-        saveButton.addActionListener(e -> saveChecklist());
+        saveButton.addActionListener(e -> {
+            // Sinkronisasi ulang dari model ke checklist
+            checklist.clear();
+            for (int i = 0; i < model.size(); i++) {
+                checklist.add(model.get(i));
+            }
 
-        JPanel panel = new JPanel();
+            if (currentUsername == null) {
+                JOptionPane.showMessageDialog(frame, "User belum login. Tidak bisa menyimpan.");
+                return;
+            }
+
+            checklistCollection.deleteMany(eq("username", currentUsername));
+            for (ChecklistItem<String> item : checklist) {
+                Document doc = new Document("username", currentUsername)
+                        .append("item", item.getItem())
+                        .append("important", item.isImportant())
+                        .append("packed", item.isPacked());
+                checklistCollection.insertOne(doc);
+            }
+
+            JOptionPane.showMessageDialog(frame, Messages.get("save.success"));
+        });
+
+        deleteButton.addActionListener(e -> {
+            int selected = list.getSelectedIndex();
+            if (selected != -1) {
+                ChecklistItem<String> selectedItem = model.get(selected);
+                int confirm = JOptionPane.showConfirmDialog(frame,
+                        Messages.get("delete.confirm") + " \"" + selectedItem.getItem() + "\"?",
+                        Messages.get("delete.title"), JOptionPane.YES_NO_OPTION);
+                if (confirm == JOptionPane.YES_OPTION) {
+                    model.remove(selected);
+                    checklist.remove(selectedItem);
+                    Bson filter = and(eq("username", currentUsername), eq("item", selectedItem.getItem()));
+                    checklistCollection.deleteOne(filter);
+                }
+            } else {
+                JOptionPane.showMessageDialog(frame, Messages.get("select.item"));
+            }
+        });
+
+        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
         panel.add(addButton);
         panel.add(markButton);
         panel.add(saveButton);
+        panel.add(deleteButton);
 
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(panel, BorderLayout.SOUTH);
 
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
+
+        SerialManager serial = new SerialManager();
+        serial.connect("COM3");
+        serial.listenSerialInput();
     }
 
     private static void loadUsers() {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(USERS_FILE))) {
-            users = (Map<String, User>) ois.readObject();
-        } catch (Exception ignored) {}
+        users.clear();
+        for (Document doc : userCollection.find()) {
+            String username = doc.getString("username");
+            String passwordHash = doc.getString("passwordHash");
+            users.put(username, new User(username, passwordHash));
+        }
     }
 
     private static void saveUsers() {
-        try (ObjectOutputStream oos = new ObjectOutputStream(new FileOutputStream(USERS_FILE))) {
-            oos.writeObject(users);
-        } catch (IOException ignored) {}
-    }
-
-    private static void saveChecklist() {
-    try (PrintWriter writer = new PrintWriter(new FileWriter(CHECKLIST_FILE))) {
-        for (ChecklistItem<String> item : checklist) {
-            writer.printf("%s,%b,%b%n",
-                item.getItem().replace(",", " "),  // hilangkan koma agar tidak rusak format CSV
-                item.isImportant(),
-                item.isPacked());
+        userCollection.drop();
+        for (User user : users.values()) {
+            Document doc = new Document("username", user.getUsername())
+                    .append("passwordHash", user.getPasswordHash());
+            userCollection.insertOne(doc);
         }
-        JOptionPane.showMessageDialog(null, "Checklist disimpan dalam format tabel (CSV).");
-    } catch (IOException e) {
-        JOptionPane.showMessageDialog(null, "Gagal menyimpan checklist.");
     }
-}
 
+    private static void deleteUserFromDB(String username) {
+        Bson filter = eq("username", username);
+        userCollection.deleteOne(filter);
+    }
 
     private static void loadChecklist() {
-        try (ObjectInputStream ois = new ObjectInputStream(new FileInputStream(CHECKLIST_FILE))) {
-            checklist = (List<ChecklistItem<String>>) ois.readObject();
-        } catch (Exception ignored) {}
+        checklist.clear();
+        for (Document doc : checklistCollection.find(eq("username", currentUsername))) {
+            String item = doc.getString("item");
+            boolean penting = doc.getBoolean("important", false);
+            boolean dibawa = doc.getBoolean("packed", false);
+            ChecklistItem<String> checklistItem = new ChecklistItem<>(item, penting);
+            checklistItem.setPacked(dibawa);
+            checklist.add(checklistItem);
+        }
     }
 }

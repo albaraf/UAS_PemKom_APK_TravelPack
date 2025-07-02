@@ -8,30 +8,36 @@ package com.mycompany.travelpackchecklist;
  *
  * @author ASUS
  */
-import java.io.Serializable;
 
-public class ChecklistItem<T> implements Serializable {
+public class ChecklistItem<T> {
     private T item;
-    private boolean isPacked;
-    private boolean isImportant;
+    private boolean important;
+    private boolean packed;
 
-    public ChecklistItem(T item, boolean isImportant) {
+    public ChecklistItem(T item, boolean important) {
         this.item = item;
-        this.isImportant = isImportant;
-        this.isPacked = false;
+        this.important = important;
+        this.packed = false;
     }
 
-    public T getItem() { return item; }
-    public boolean isPacked() { return isPacked; }
-    public void setPacked(boolean packed) { isPacked = packed; }
-    public boolean isImportant() { return isImportant; }
+    public T getItem() {
+        return item;
+    }
+
+    public boolean isImportant() {
+        return important;
+    }
+
+    public boolean isPacked() {
+        return packed;
+    }
+
+    public void setPacked(boolean packed) {
+        this.packed = packed;
+    }
 
     @Override
     public String toString() {
-        return String.format("[%s] %s %s",
-                isPacked ? "x" : " ",
-                item.toString(),
-                isImportant ? "(Penting)" : "");
+        return item + (important ? " (Penting)" : "") + (packed ? " ✓" : "");
     }
 }
-
