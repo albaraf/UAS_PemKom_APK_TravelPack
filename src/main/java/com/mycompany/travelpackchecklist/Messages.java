@@ -23,4 +23,11 @@ public class Messages {
         }
         return bundle.getString(key);
     }
+
+    public static Locale getCurrentLocale() {
+        if (bundle == null) {
+            setLocale(Locale.getDefault());
+        }
+        return bundle.getLocale();
+    }
 }

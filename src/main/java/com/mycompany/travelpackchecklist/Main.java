@@ -8,9 +8,6 @@ import com.mongodb.client.*;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import static com.mongodb.client.model.Filters.*;
-import com.mycompany.travelpackchecklist.ChecklistSaver;
-import com.mycompany.travelpackchecklist.Messages;
-import com.mycompany.travelpackchecklist.SerialManager;
 
 public class Main {
     private static Map<String, User> users = new HashMap<>();
@@ -37,7 +34,7 @@ public class Main {
         JPanel inputPanel = new JPanel(new GridLayout(4, 2));
         JTextField usernameField = new JTextField();
         JPasswordField passwordField = new JPasswordField();
-        JComboBox<String> languageSelector = new JComboBox<>(new String[] { "Indonesia", "English" });
+        JComboBox<String> languageSelector = new JComboBox<>(new String[] { "Indonesia", "English", "العربية" });
 
         JLabel usernameLabel = new JLabel(Messages.get("label.username"));
         JLabel passwordLabel = new JLabel(Messages.get("label.password"));
@@ -126,6 +123,9 @@ public class Main {
             case "Indonesia":
                 selectedLocale = new Locale("id", "ID");
                 break;
+            case "العربية":
+                selectedLocale = new Locale("ar");
+                break;
             case "English":
             default:
                 selectedLocale = new Locale("en");
@@ -133,6 +133,7 @@ public class Main {
         }
         Messages.setLocale(selectedLocale);
     }
+    
 
     private static void showChecklistUI() {
         JFrame frame = new JFrame(Messages.get("checklist.title"));
@@ -148,17 +149,26 @@ public class Main {
         JButton markButton = new JButton(Messages.get("mark.packed"));
         JButton saveButton = new JButton(Messages.get("save"));
         JButton deleteButton = new JButton(Messages.get("delete"));
+        JButton logoutButton = new JButton(Messages.get("logout"));
 
         addButton.addActionListener(e -> {
-            String item = JOptionPane.showInputDialog(frame, Messages.get("add.item"));
-            if (item != null && !item.isBlank()) {
-                int result = JOptionPane.showConfirmDialog(frame, Messages.get("important"), Messages.get("important.title"), JOptionPane.YES_NO_OPTION);
-                boolean penting = (result == JOptionPane.YES_OPTION);
-                ChecklistItem<String> newItem = new ChecklistItem<>(item, penting);
-                checklist.add(newItem);
-                model.addElement(newItem);
-            }
-        });
+    String item = JOptionPane.showInputDialog(frame, Messages.get("add.item"));
+    if (item != null && !item.isBlank()) {
+        int result = JOptionPane.showConfirmDialog(frame, Messages.get("important"), Messages.get("important.title"), JOptionPane.YES_NO_OPTION);
+        boolean penting = (result == JOptionPane.YES_OPTION);
+
+        String targetLang = Messages.getCurrentLocale().getLanguage();
+        String translatedItem = item;
+
+        if (!targetLang.equals("id") && !targetLang.equals("en")) {
+            translatedItem = Translator.translate(item, targetLang);
+        }
+
+        ChecklistItem<String> newItem = new ChecklistItem<>(translatedItem, penting);
+        checklist.add(newItem);
+        model.addElement(newItem);
+    }
+});
 
         markButton.addActionListener(e -> {
             int selected = list.getSelectedIndex();
@@ -169,7 +179,6 @@ public class Main {
         });
 
         saveButton.addActionListener(e -> {
-            // Sinkronisasi ulang dari model ke checklist
             checklist.clear();
             for (int i = 0; i < model.size(); i++) {
                 checklist.add(model.get(i));
@@ -210,11 +219,27 @@ public class Main {
             }
         });
 
-        JPanel panel = new JPanel(new GridLayout(2, 2, 5, 5));
+        logoutButton.addActionListener(e -> {
+    int confirm = JOptionPane.showConfirmDialog(
+        frame,
+        Messages.get("logout.confirm"),
+        Messages.get("logout.title"),
+        JOptionPane.YES_NO_OPTION
+    );
+    if (confirm == JOptionPane.YES_OPTION) {
+        frame.dispose();
+        currentUsername = null;
+        showLoginForm();
+    }
+});
+
+
+        JPanel panel = new JPanel(new GridLayout(3, 2, 5, 5));
         panel.add(addButton);
         panel.add(markButton);
         panel.add(saveButton);
         panel.add(deleteButton);
+        panel.add(logoutButton);
 
         frame.add(scrollPane, BorderLayout.CENTER);
         frame.add(panel, BorderLayout.SOUTH);
