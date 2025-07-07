@@ -8,8 +8,9 @@ package com.mycompany.travelpackchecklist;
  *
  * @author ASUS
  */
+import java.io.Serializable;
 
-public class ChecklistItem<T> {
+public class ChecklistItem<T> implements Serializable {
     private T item;
     private boolean important;
     private boolean packed;
@@ -38,6 +39,6 @@ public class ChecklistItem<T> {
 
     @Override
     public String toString() {
-        return item + (important ? " (Penting)" : "") + (packed ? " ✓" : "");
+        return (important ? "[penting]" : "") + item + (packed ? " (✔️)" : "");
     }
 }

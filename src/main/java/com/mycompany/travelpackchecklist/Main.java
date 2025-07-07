@@ -3,11 +3,13 @@ package com.mycompany.travelpackchecklist;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.io.*;
 import java.util.*;
 import com.mongodb.client.*;
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import static com.mongodb.client.model.Filters.*;
+import com.mycompany.travelpackchecklist.SerialManager;
 
 public class Main {
     private static Map<String, User> users = new HashMap<>();
@@ -56,6 +58,7 @@ public class Main {
         buttonPanel.add(tambahUserButton);
         buttonPanel.add(hapusUserButton);
 
+        // Event ganti bahasa
         languageSelector.addActionListener(e -> {
             String selectedLanguage = (String) languageSelector.getSelectedItem();
             setLocaleFromSelection(selectedLanguage);
@@ -67,6 +70,7 @@ public class Main {
             hapusUserButton.setText(Messages.get("button.deleteuser"));
         });
 
+        // Login
         loginButton.addActionListener(e -> {
             String username = usernameField.getText();
             String password = new String(passwordField.getPassword());
@@ -86,6 +90,7 @@ public class Main {
             }
         });
 
+        // Tambah user
         tambahUserButton.addActionListener(e -> {
             String username = usernameField.getText();
             String password = new String(passwordField.getPassword());
@@ -99,6 +104,7 @@ public class Main {
             }
         });
 
+        // Hapus user
         hapusUserButton.addActionListener(e -> {
             String username = usernameField.getText();
             if (!users.containsKey(username)) {
@@ -133,12 +139,11 @@ public class Main {
         }
         Messages.setLocale(selectedLocale);
     }
-    
 
     private static void showChecklistUI() {
         JFrame frame = new JFrame(Messages.get("checklist.title"));
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(400, 400);
+        frame.setSize(500, 500);
 
         DefaultListModel<ChecklistItem<String>> model = new DefaultListModel<>();
         checklist.forEach(model::addElement);
@@ -150,26 +155,22 @@ public class Main {
         JButton saveButton = new JButton(Messages.get("save"));
         JButton deleteButton = new JButton(Messages.get("delete"));
         JButton logoutButton = new JButton(Messages.get("logout"));
+        JButton exportButton = new JButton("Export CSV");
+        JButton importButton = new JButton("Import CSV");
 
+        // Tambah item
         addButton.addActionListener(e -> {
-    String item = JOptionPane.showInputDialog(frame, Messages.get("add.item"));
-    if (item != null && !item.isBlank()) {
-        int result = JOptionPane.showConfirmDialog(frame, Messages.get("important"), Messages.get("important.title"), JOptionPane.YES_NO_OPTION);
-        boolean penting = (result == JOptionPane.YES_OPTION);
+            String item = JOptionPane.showInputDialog(frame, Messages.get("add.item"));
+            if (item != null && !item.isBlank()) {
+                int result = JOptionPane.showConfirmDialog(frame, Messages.get("important"), Messages.get("important.title"), JOptionPane.YES_NO_OPTION);
+                boolean penting = (result == JOptionPane.YES_OPTION);
+                ChecklistItem<String> newItem = new ChecklistItem<>(item, penting);
+                checklist.add(newItem);
+                model.addElement(newItem);
+            }
+        });
 
-        String targetLang = Messages.getCurrentLocale().getLanguage();
-        String translatedItem = item;
-
-        if (!targetLang.equals("id") && !targetLang.equals("en")) {
-            translatedItem = Translator.translate(item, targetLang);
-        }
-
-        ChecklistItem<String> newItem = new ChecklistItem<>(translatedItem, penting);
-        checklist.add(newItem);
-        model.addElement(newItem);
-    }
-});
-
+        // Tandai dibawa
         markButton.addActionListener(e -> {
             int selected = list.getSelectedIndex();
             if (selected != -1) {
@@ -178,17 +179,12 @@ public class Main {
             }
         });
 
+        // Simpan ke Mongo
         saveButton.addActionListener(e -> {
             checklist.clear();
             for (int i = 0; i < model.size(); i++) {
                 checklist.add(model.get(i));
             }
-
-            if (currentUsername == null) {
-                JOptionPane.showMessageDialog(frame, "User belum login. Tidak bisa menyimpan.");
-                return;
-            }
-
             checklistCollection.deleteMany(eq("username", currentUsername));
             for (ChecklistItem<String> item : checklist) {
                 Document doc = new Document("username", currentUsername)
@@ -197,10 +193,10 @@ public class Main {
                         .append("packed", item.isPacked());
                 checklistCollection.insertOne(doc);
             }
-
             JOptionPane.showMessageDialog(frame, Messages.get("save.success"));
         });
 
+        // Hapus item
         deleteButton.addActionListener(e -> {
             int selected = list.getSelectedIndex();
             if (selected != -1) {
@@ -219,26 +215,30 @@ public class Main {
             }
         });
 
+        // Export CSV
+        exportButton.addActionListener(e -> exportChecklistToCSV());
+
+        // Import CSV
+        importButton.addActionListener(e -> {
+            importChecklistFromCSV();
+            model.clear();
+            checklist.forEach(model::addElement);
+        });
+
+        // Logout
         logoutButton.addActionListener(e -> {
-    int confirm = JOptionPane.showConfirmDialog(
-        frame,
-        Messages.get("logout.confirm"),
-        Messages.get("logout.title"),
-        JOptionPane.YES_NO_OPTION
-    );
-    if (confirm == JOptionPane.YES_OPTION) {
-        frame.dispose();
-        currentUsername = null;
-        showLoginForm();
-    }
-});
+            frame.dispose();
+            currentUsername = null;
+            showLoginForm();
+        });
 
-
-        JPanel panel = new JPanel(new GridLayout(3, 2, 5, 5));
+        JPanel panel = new JPanel(new GridLayout(4, 2, 5, 5));
         panel.add(addButton);
         panel.add(markButton);
         panel.add(saveButton);
         panel.add(deleteButton);
+        panel.add(exportButton);
+        panel.add(importButton);
         panel.add(logoutButton);
 
         frame.add(scrollPane, BorderLayout.CENTER);
@@ -247,9 +247,62 @@ public class Main {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
 
+        // Serial communication
         SerialManager serial = new SerialManager();
         serial.connect("COM3");
         serial.listenSerialInput();
+    }
+
+    private static void exportChecklistToCSV() {
+        try {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Pilih lokasi untuk export CSV");
+            int userSelection = fileChooser.showSaveDialog(null);
+            if (userSelection == JFileChooser.APPROVE_OPTION) {
+                File file = fileChooser.getSelectedFile();
+                PrintWriter writer = new PrintWriter(file);
+                writer.println("item,important,packed");
+                for (ChecklistItem<String> item : checklist) {
+                    writer.println("\"" + item.getItem() + "\"," + item.isImportant() + "," + item.isPacked());
+                }
+                writer.close();
+                JOptionPane.showMessageDialog(null, "Berhasil export ke CSV!");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Gagal export: " + e.getMessage());
+        }
+    }
+
+    private static void importChecklistFromCSV() {
+        try {
+            JFileChooser fileChooser = new JFileChooser();
+            fileChooser.setDialogTitle("Pilih file CSV untuk diimport");
+            int userSelection = fileChooser.showOpenDialog(null);
+            if (userSelection == JFileChooser.APPROVE_OPTION) {
+                File selectedFile = fileChooser.getSelectedFile();
+                BufferedReader reader = new BufferedReader(new FileReader(selectedFile));
+                String line;
+                checklist.clear();
+                reader.readLine(); // Skip header
+                while ((line = reader.readLine()) != null) {
+                    String[] parts = line.split(",", -1);
+                    if (parts.length >= 3) {
+                        String item = parts[0].replace("\"", "");
+                        boolean important = Boolean.parseBoolean(parts[1]);
+                        boolean packed = Boolean.parseBoolean(parts[2]);
+                        ChecklistItem<String> newItem = new ChecklistItem<>(item, important);
+                        newItem.setPacked(packed);
+                        checklist.add(newItem);
+                    }
+                }
+                reader.close();
+                JOptionPane.showMessageDialog(null, "Berhasil import dari CSV!");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            JOptionPane.showMessageDialog(null, "Gagal import: " + e.getMessage());
+        }
     }
 
     private static void loadUsers() {
