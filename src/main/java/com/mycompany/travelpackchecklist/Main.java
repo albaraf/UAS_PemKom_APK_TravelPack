@@ -58,7 +58,6 @@ public class Main {
         buttonPanel.add(tambahUserButton);
         buttonPanel.add(hapusUserButton);
 
-        // Event ganti bahasa
         languageSelector.addActionListener(e -> {
             String selectedLanguage = (String) languageSelector.getSelectedItem();
             setLocaleFromSelection(selectedLanguage);
@@ -70,7 +69,6 @@ public class Main {
             hapusUserButton.setText(Messages.get("button.deleteuser"));
         });
 
-        // Login
         loginButton.addActionListener(e -> {
             String username = usernameField.getText();
             String password = new String(passwordField.getPassword());
@@ -90,7 +88,6 @@ public class Main {
             }
         });
 
-        // Tambah user
         tambahUserButton.addActionListener(e -> {
             String username = usernameField.getText();
             String password = new String(passwordField.getPassword());
@@ -104,7 +101,6 @@ public class Main {
             }
         });
 
-        // Hapus user
         hapusUserButton.addActionListener(e -> {
             String username = usernameField.getText();
             if (!users.containsKey(username)) {
@@ -158,7 +154,6 @@ public class Main {
         JButton exportButton = new JButton("Export CSV");
         JButton importButton = new JButton("Import CSV");
 
-        // Tambah item
         addButton.addActionListener(e -> {
             String item = JOptionPane.showInputDialog(frame, Messages.get("add.item"));
             if (item != null && !item.isBlank()) {
@@ -170,7 +165,6 @@ public class Main {
             }
         });
 
-        // Tandai dibawa
         markButton.addActionListener(e -> {
             int selected = list.getSelectedIndex();
             if (selected != -1) {
@@ -179,7 +173,6 @@ public class Main {
             }
         });
 
-        // Simpan ke Mongo
         saveButton.addActionListener(e -> {
             checklist.clear();
             for (int i = 0; i < model.size(); i++) {
@@ -196,7 +189,6 @@ public class Main {
             JOptionPane.showMessageDialog(frame, Messages.get("save.success"));
         });
 
-        // Hapus item
         deleteButton.addActionListener(e -> {
             int selected = list.getSelectedIndex();
             if (selected != -1) {
@@ -215,17 +207,14 @@ public class Main {
             }
         });
 
-        // Export CSV
         exportButton.addActionListener(e -> exportChecklistToCSV());
 
-        // Import CSV
         importButton.addActionListener(e -> {
             importChecklistFromCSV();
             model.clear();
             checklist.forEach(model::addElement);
         });
 
-        // Logout
         logoutButton.addActionListener(e -> {
             frame.dispose();
             currentUsername = null;
@@ -247,7 +236,6 @@ public class Main {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
 
-        // Serial communication
         SerialManager serial = new SerialManager();
         serial.connect("COM3");
         serial.listenSerialInput();
@@ -260,7 +248,11 @@ public class Main {
             int userSelection = fileChooser.showSaveDialog(null);
             if (userSelection == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
-                PrintWriter writer = new PrintWriter(file);
+                // Tambah .csv jika belum ada
+                if (!file.getName().toLowerCase().endsWith(".csv")) {
+                    file = new File(file.getAbsolutePath() + ".csv");
+                }
+                PrintWriter writer = new PrintWriter(new OutputStreamWriter(new FileOutputStream(file), "UTF-8"));
                 writer.println("item,important,packed");
                 for (ChecklistItem<String> item : checklist) {
                     writer.println("\"" + item.getItem() + "\"," + item.isImportant() + "," + item.isPacked());
@@ -281,10 +273,10 @@ public class Main {
             int userSelection = fileChooser.showOpenDialog(null);
             if (userSelection == JFileChooser.APPROVE_OPTION) {
                 File selectedFile = fileChooser.getSelectedFile();
-                BufferedReader reader = new BufferedReader(new FileReader(selectedFile));
+                BufferedReader reader = new BufferedReader(new InputStreamReader(new FileInputStream(selectedFile), "UTF-8"));
                 String line;
                 checklist.clear();
-                reader.readLine(); // Skip header
+                reader.readLine(); // skip header
                 while ((line = reader.readLine()) != null) {
                     String[] parts = line.split(",", -1);
                     if (parts.length >= 3) {
