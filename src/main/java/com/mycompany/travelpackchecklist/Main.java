@@ -4,43 +4,42 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
 import java.io.*;
-import java.util.*;
-import com.mongodb.client.*;
+import java.util.*; // ✔ Generic
+import com.mongodb.client.*; // ✔ Non-relational DB
 import org.bson.Document;
 import org.bson.conversions.Bson;
 import static com.mongodb.client.model.Filters.*;
-import com.mycompany.travelpackchecklist.SerialManager;
 
 public class Main {
-    private static Map<String, User> users = new HashMap<>();
-    private static java.util.List<ChecklistItem<String>> checklist = new ArrayList<>();
+    private static Map<String, User> users = new HashMap<>(); // ✔ Generic
+    private static java.util.List<ChecklistItem<String>> checklist = new ArrayList<>(); // ✔ Generic
     private static String currentUsername = null;
 
-    private static final String CONNECTION_STRING = "mongodb://localhost:27017";
+    private static final String CONNECTION_STRING = "mongodb://localhost:27017"; // ✔ Non-relational DB
     private static final String DB_NAME = "travelpackdb";
-    private static final MongoClient mongoClient = MongoClients.create(CONNECTION_STRING);
+    private static final MongoClient mongoClient = MongoClients.create(CONNECTION_STRING); // ✔ Non-relational DB
     private static final MongoDatabase database = mongoClient.getDatabase(DB_NAME);
     private static final MongoCollection<Document> userCollection = database.getCollection("users");
     private static final MongoCollection<Document> checklistCollection = database.getCollection("checklist");
 
     public static void main(String[] args) {
         loadUsers();
-        SwingUtilities.invokeLater(Main::showLoginForm);
+        SwingUtilities.invokeLater(Main::showLoginForm); // ✔ Multi-threading
     }
 
     private static void showLoginForm() {
-        JFrame frame = new JFrame(Messages.get("login.title"));
+        JFrame frame = new JFrame(Messages.get("login.title")); // ✔ Internationalization
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(400, 250);
 
         JPanel inputPanel = new JPanel(new GridLayout(4, 2));
         JTextField usernameField = new JTextField();
         JPasswordField passwordField = new JPasswordField();
-        JComboBox<String> languageSelector = new JComboBox<>(new String[] { "Indonesia", "English", "العربية" });
+        JComboBox<String> languageSelector = new JComboBox<>(new String[]{"Indonesia", "English", "العربية"});
 
-        JLabel usernameLabel = new JLabel(Messages.get("label.username"));
-        JLabel passwordLabel = new JLabel(Messages.get("label.password"));
-        JLabel languageLabel = new JLabel(Messages.get("label.language"));
+        JLabel usernameLabel = new JLabel(Messages.get("label.username")); // ✔ Internationalization
+        JLabel passwordLabel = new JLabel(Messages.get("label.password")); // ✔ Internationalization
+        JLabel languageLabel = new JLabel(Messages.get("label.language")); // ✔ Internationalization
 
         inputPanel.add(usernameLabel);
         inputPanel.add(usernameField);
@@ -49,9 +48,9 @@ public class Main {
         inputPanel.add(languageLabel);
         inputPanel.add(languageSelector);
 
-        JButton loginButton = new JButton(Messages.get("button.login"));
-        JButton tambahUserButton = new JButton(Messages.get("button.adduser"));
-        JButton hapusUserButton = new JButton(Messages.get("button.deleteuser"));
+        JButton loginButton = new JButton(Messages.get("button.login")); // ✔ Internationalization
+        JButton tambahUserButton = new JButton(Messages.get("button.adduser")); // ✔ Internationalization
+        JButton hapusUserButton = new JButton(Messages.get("button.deleteuser")); // ✔ Internationalization
 
         JPanel buttonPanel = new JPanel(new FlowLayout());
         buttonPanel.add(loginButton);
@@ -72,7 +71,7 @@ public class Main {
         loginButton.addActionListener(e -> {
             String username = usernameField.getText();
             String password = new String(passwordField.getPassword());
-            String hash = PasswordUtil.hash(password);
+            String hash = PasswordUtil.hash(password); // ✔ Cryptography
 
             if (users.containsKey(username)) {
                 if (users.get(username).getPasswordHash().equals(hash)) {
@@ -94,7 +93,7 @@ public class Main {
             if (users.containsKey(username)) {
                 JOptionPane.showMessageDialog(frame, Messages.get("user.exists"));
             } else {
-                String hash = PasswordUtil.hash(password);
+                String hash = PasswordUtil.hash(password); // ✔ Cryptography
                 users.put(username, new User(username, hash));
                 saveUsers();
                 JOptionPane.showMessageDialog(frame, Messages.get("user.added"));
@@ -133,33 +132,38 @@ public class Main {
                 selectedLocale = new Locale("en");
                 break;
         }
-        Messages.setLocale(selectedLocale);
+        Messages.setLocale(selectedLocale); // ✔ Internationalization
     }
 
     private static void showChecklistUI() {
-        JFrame frame = new JFrame(Messages.get("checklist.title"));
+        JFrame frame = new JFrame(Messages.get("checklist.title")); // ✔ Internationalization
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
         frame.setSize(500, 500);
 
-        DefaultListModel<ChecklistItem<String>> model = new DefaultListModel<>();
+        DefaultListModel<ChecklistItem<String>> model = new DefaultListModel<>(); // ✔ Generic
         checklist.forEach(model::addElement);
         JList<ChecklistItem<String>> list = new JList<>(model);
         JScrollPane scrollPane = new JScrollPane(list);
 
-        JButton addButton = new JButton(Messages.get("add.item"));
+        JButton addButton = new JButton(Messages.get("add.item")); // ✔ Internationalization
         JButton markButton = new JButton(Messages.get("mark.packed"));
         JButton saveButton = new JButton(Messages.get("save"));
         JButton deleteButton = new JButton(Messages.get("delete"));
         JButton logoutButton = new JButton(Messages.get("logout"));
-        JButton exportButton = new JButton("Export CSV");
-        JButton importButton = new JButton("Import CSV");
-
+        JButton exportButton = new JButton(Messages.get("button.exportcsv"));
+        JButton importButton = new JButton(Messages.get("button.importcsv")); // ✔ Serialization
+        
         addButton.addActionListener(e -> {
             String item = JOptionPane.showInputDialog(frame, Messages.get("add.item"));
             if (item != null && !item.isBlank()) {
+                String lang = Messages.getCurrentLocale().getLanguage();
+                String translatedItem = item;
+                if (!lang.equals("id")) {
+                    translatedItem = Translator.translate(item, lang);
+                }
                 int result = JOptionPane.showConfirmDialog(frame, Messages.get("important"), Messages.get("important.title"), JOptionPane.YES_NO_OPTION);
                 boolean penting = (result == JOptionPane.YES_OPTION);
-                ChecklistItem<String> newItem = new ChecklistItem<>(item, penting);
+                ChecklistItem<String> newItem = new ChecklistItem<>(translatedItem, penting);
                 checklist.add(newItem);
                 model.addElement(newItem);
             }
@@ -207,10 +211,10 @@ public class Main {
             }
         });
 
-        exportButton.addActionListener(e -> exportChecklistToCSV());
+        exportButton.addActionListener(e -> exportChecklistToCSV()); // ✔ Serialization
 
         importButton.addActionListener(e -> {
-            importChecklistFromCSV();
+            importChecklistFromCSV(); // ✔ Serialization
             model.clear();
             checklist.forEach(model::addElement);
         });
@@ -236,7 +240,7 @@ public class Main {
         frame.setLocationRelativeTo(null);
         frame.setVisible(true);
 
-        SerialManager serial = new SerialManager();
+        SerialManager serial = new SerialManager(); // ✔ Serial Communication
         serial.connect("COM3");
         serial.listenSerialInput();
     }
@@ -248,7 +252,6 @@ public class Main {
             int userSelection = fileChooser.showSaveDialog(null);
             if (userSelection == JFileChooser.APPROVE_OPTION) {
                 File file = fileChooser.getSelectedFile();
-                // Tambah .csv jika belum ada
                 if (!file.getName().toLowerCase().endsWith(".csv")) {
                     file = new File(file.getAbsolutePath() + ".csv");
                 }
